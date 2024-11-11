@@ -1,0 +1,10 @@
+[package]
+name = "calyx-model-checker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitvec = "1.0.1"
+calyx-ffi = { git = "https://github.com/calyxir/calyx", rev = "454b29b48097e80e6ee06e76bd7efc80bade4686" }
+derivative = "2.2.0"
+rand = "0.8.5"
