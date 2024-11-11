@@ -62,6 +62,7 @@ mod tests {
         let mut ctx = Context::<Fifo>::default();
 
         let no_errors = ctx.property("no errors", |fifo| fifo.status() != QueueStatus::Err);
+        let has_errors = ctx.negated(no_errors);
 
         let is_empty = ctx.property("is empty", |fifo| fifo.length() == 0);
         let not_empty = ctx.negated(is_empty);
@@ -103,18 +104,28 @@ mod tests {
             b.require(no_errors);
         });
 
-        let mut engine = Engine::new(fifo.clone(), &mut ctx);
-        // engine.add_spec(push_ok);
-        // engine.add_spec(pop_ok);
-        // engine.add_spec(push_pop);
-        engine.add_spec(bad);
-        engine.search(1);
+        let find_error = ctx.spec("pop empty queue gives error", |b| {
+            b.when([is_empty]);
+            b.run(pop_op, []);
+            b.require(has_errors);
+        });
 
-        // fifo.push(1);
-        // fifo.push(2);
-        // assert_eq!(1, fifo.pop());
-        // fifo.push(3);
-        // assert_eq!(2, fifo.pop());
-        // assert_eq!(3, fifo.pop());
+        let errors_persist = ctx.spec("errors persist", |b| {
+            b.when([has_errors]);
+
+            let value = b.var::<Arbitrary<u32>>("value");
+            b.run(push_op, [value]);
+
+            b.require(has_errors);
+        });
+
+        let mut engine = Engine::new(fifo.clone(), &mut ctx);
+        engine.add_spec(push_ok);
+        engine.add_spec(pop_ok);
+        engine.add_spec(push_pop);
+        engine.add_spec(find_error);
+        engine.add_spec(errors_persist);
+        // engine.add_spec(bad);
+        engine.search(10);
     }
 }

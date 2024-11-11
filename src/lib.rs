@@ -338,6 +338,10 @@ impl<'context, T: Clone> SpecBuilder<'context, T> {
             }),
         ));
     }
+
+    pub fn fork<F1: Fn(&mut SpecBuilder<T>), F2: Fn(&mut SpecBuilder<T>)>(&mut self, a: F1, b: F2) {
+        todo!()
+    }
 }
 
 impl<T: Clone> Context<T> {
@@ -405,7 +409,7 @@ impl<T: Clone> Context<T> {
         })
     }
 
-    pub fn spec<S: AsRef<str>, F: FnMut(&mut SpecBuilder<T>)>(
+    pub fn spec<S: AsRef<str>, F: Fn(&mut SpecBuilder<T>)>(
         &mut self,
         description: S,
         mut f: F,
@@ -465,6 +469,7 @@ pub struct Engine<'context, T: Clone> {
     context: &'context mut Context<T>,
     bfs: VecDeque<SearchNode<T>>,
     specs: DenseAssociationMap<Spec<T>, PropertySet<T>>,
+    hits: DenseAssociationMap<Spec<T>, usize>,
 }
 
 impl<'context, T: Clone> Engine<'context, T> {
@@ -474,6 +479,7 @@ impl<'context, T: Clone> Engine<'context, T> {
             context,
             bfs: VecDeque::default(),
             specs: DenseAssociationMap::default(),
+            hits: DenseAssociationMap::default(),
         }
     }
 
@@ -488,6 +494,7 @@ impl<'context, T: Clone> Engine<'context, T> {
             property_set.insert(*precondition);
         }
         self.specs.associate(spec, property_set);
+        self.hits.associate(spec, 0);
     }
 
     pub fn search(&mut self, max_iters: usize) {
@@ -507,6 +514,13 @@ impl<'context, T: Clone> Engine<'context, T> {
 
             iters += 1;
         }
+
+        println!("could not find invariant-violating trace");
+        for (spec, hits) in self.hits.iter() {
+            let info = self.context.specs[spec].info;
+            let info = &self.context.info_map[info];
+            println!("'{}' passed {} time(s)", info.name_like(), hits);
+        }
     }
 
     fn find_applicable_specs(&self, properties: PropertySet<T>) -> Vec<Id<Spec<T>>> {
@@ -514,15 +528,6 @@ impl<'context, T: Clone> Engine<'context, T> {
         for (spec, preconditions) in self.specs.iter() {
             if preconditions.is_subset_of(&properties) {
                 applicable.push(spec);
-            } else {
-                let info = self.context.specs[spec].info;
-                let info = &self.context.info_map[info];
-                panic!(
-                    "spec {} could not be applied: {:?} not a subset of {:?}",
-                    info.name_like(),
-                    preconditions,
-                    properties
-                );
             }
         }
         applicable
@@ -535,9 +540,9 @@ impl<'context, T: Clone> Engine<'context, T> {
         spec: Id<Spec<T>>,
     ) {
         let (base_context, vars) = self.context.split();
-        let spec = &base_context.specs[spec];
+        let spec_ref = &base_context.specs[spec];
 
-        for input in &spec.inputs {
+        for input in &spec_ref.inputs {
             EvaluationContext {
                 vars,
                 store: var_store,
@@ -545,7 +550,7 @@ impl<'context, T: Clone> Engine<'context, T> {
             .init(*input);
         }
 
-        for step in &spec.workload.steps {
+        for step in &spec_ref.workload.steps {
             match step {
                 Step::Op(op, inputs) => {
                     let mut evaluation_context = EvaluationContext {
@@ -575,5 +580,7 @@ impl<'context, T: Clone> Engine<'context, T> {
                 }
             }
         }
+
+        self.hits[spec] += 1;
     }
 }

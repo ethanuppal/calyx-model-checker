@@ -3,7 +3,7 @@ use std::{
     fmt::{self, Debug},
     hash::Hash,
     marker::PhantomData,
-    ops,
+    ops::{self, Index, IndexMut},
     slice::Iter,
 };
 
@@ -189,7 +189,7 @@ impl<K: DenseKey> Debug for DenseSet<K> {
 
 #[derive(Derivative)]
 #[derivative(Default(bound = ""))]
-pub struct DenseAssociationMap<Original, Assoc> {
+pub struct DenseAssociationMap<Original, Assoc: Default> {
     store: Vec<Assoc>,
     valid: DenseSet<Id<Original>>,
     generic: PhantomData<(Original, Assoc)>,
@@ -205,7 +205,10 @@ impl<Original, Assoc: Default> DenseAssociationMap<Original, Assoc> {
     }
 
     pub fn retrieve(&self, id: Id<Original>) -> &Assoc {
-        assert!(self.valid.contains(id), "index out of bounds");
+        assert!(
+            self.valid.contains(id),
+            "index out of bounds or not assigned"
+        );
         &self.store[id.index]
     }
 
@@ -219,6 +222,24 @@ impl<Original, Assoc: Default> DenseAssociationMap<Original, Assoc> {
             valid: &self.valid,
             index: 0,
         }
+    }
+}
+
+impl<Original, Assoc: Default> Index<Id<Original>> for DenseAssociationMap<Original, Assoc> {
+    type Output = Assoc;
+
+    fn index(&self, id: Id<Original>) -> &Self::Output {
+        self.retrieve(id)
+    }
+}
+
+impl<Original, Assoc: Default> IndexMut<Id<Original>> for DenseAssociationMap<Original, Assoc> {
+    fn index_mut(&mut self, id: Id<Original>) -> &mut Self::Output {
+        assert!(
+            self.valid.contains(id),
+            "index out of bounds or not assigned"
+        );
+        &mut self.store[id.index]
     }
 }
 
